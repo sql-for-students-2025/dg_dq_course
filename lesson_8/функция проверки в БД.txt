@@ -1,0 +1,60 @@
+CREATE OR REPLACE FUNCTION test_sch.dq_check_trn_null_customer(is_productive bool, trn_date date)
+returns record
+LANGUAGE plpgsql
+AS $function$
+declare
+	bad_trn_count integer;
+	bad_trn_damage float;
+	ret record;
+begin 
+
+	if is_productive then
+
+		if trn_date < (select min(cast(dt as date)) from public.transactions)
+			or trn_date > (select max(cast(dt as date)) from public.transactions)
+		then
+			raise exception 'Указанная дата не входит в диапазон дат сущности';
+		end if;
+
+		select
+			count(1),
+			sum(cheque_sum)
+		into bad_trn_count, bad_trn_damage
+		from
+			public.transactions
+		where
+			cast(dt as date) = trn_date
+			and customer_id is null
+		;
+
+	else
+
+		if trn_date < (select min(cast(dt as date)) from dq_dg.transactions)
+			or trn_date > (select max(cast(dt as date)) from dq_dg.transactions)
+		then
+			raise exception 'Указанная дата не входит в диапазон дат сущности';
+		end if;
+
+		select
+			count(1),
+			sum(cheque_sum)
+		into bad_trn_count, bad_trn_damage
+		from
+			dq_dg.transactions
+		where
+			cast(dt as date) = trn_date
+			and customer_id is null
+		;
+
+	end if;
+
+	select
+		bad_trn_count,
+		bad_trn_damage
+	into ret
+	;
+
+	return ret;
+
+end;
+$function$
